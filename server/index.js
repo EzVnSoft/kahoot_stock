@@ -92,8 +92,14 @@ export function createApp(questions, options = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const questions = JSON.parse(fs.readFileSync(path.join(root, 'data', 'questions.json'), 'utf8'));
   const port = Number(process.env.PORT) || 3000;
-  createApp(questions).listen(port, () => {
+  // HOST is optional: unset = listen on all network interfaces (reachable from your LAN);
+  // HOST=127.0.0.1 = only this computer (use this when a tunnel such as Cloudflare/Tailscale does the public part).
+  const host = process.env.HOST;
+  const onReady = () => {
     console.log(`Quiz server ready: ${questions.length} questions, ${Math.min(QUESTIONS_PER_SESSION, questions.length)} per session`);
-    console.log(`Open http://localhost:${port}`);
-  });
+    console.log(`Open http://localhost:${port}${host ? ` (listening on ${host})` : ''}`);
+  };
+  const app = createApp(questions);
+  if (host) app.listen(port, host, onReady);
+  else app.listen(port, onReady);
 }

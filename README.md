@@ -18,6 +18,10 @@ npm start         # http://localhost:3000
 
 Use another port with `PORT=4000 npm start`.
 
+To keep it running 24/7 on a Mac mini at home (starts at boot, optional public HTTPS address), follow [DEPLOY-MAC.md](DEPLOY-MAC.md).
+
+To run it on Google Cloud Run instead, follow [DEPLOY-CLOUDRUN.md](DEPLOY-CLOUDRUN.md) (uses the `Dockerfile`).
+
 ## Develop
 
 ```bash

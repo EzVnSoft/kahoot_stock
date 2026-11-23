@@ -1,0 +1,13 @@
+# Never copy the Mac's node_modules into the image: the image installs its own Linux ones.
+node_modules
+**/node_modules
+client/dist
+.git
+.gitignore
+logs
+*.log
+.DS_Store
+Questions_stocks*.csv
+deploy
+DEPLOY-*.md
+README.md
