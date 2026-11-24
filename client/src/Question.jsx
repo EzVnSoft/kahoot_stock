@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { T } from './strings.js';
 import { TILES, LETTERS } from './theme.js';
+import Countdown from './Countdown.jsx';
 
 const fmt = (indices) => (indices.length ? indices.map((i) => LETTERS[i]).join(', ') : T.none);
 
-export default function Question({ game, setGame, run, busy, onReset }) {
+export default function Question({ game, setGame, run, busy, onReset, onTimeUp }) {
   const { question: q, index, total, score, sessionId } = game;
   const [picked, setPicked] = useState([]); // option indexes (for "order": in the order tapped)
   const [result, setResult] = useState(
@@ -61,6 +62,7 @@ export default function Question({ game, setGame, run, busy, onReset }) {
     <main className="quiz">
       <header className="topbar">
         <span className="pill">{T.question(index + 1, total)}</span>
+        {game.endsAt != null && <Countdown endsAt={game.endsAt} onExpire={onTimeUp} />}
         <button type="button" className="pill pill-btn" onClick={() => setConfirming(true)} disabled={busy || confirming}>
           ↻ {T.reset}
         </button>
@@ -68,7 +70,7 @@ export default function Question({ game, setGame, run, busy, onReset }) {
       </header>
       {confirming && (
         <div className="confirm-bar" role="alert">
-          <span>{T.resetAsk}</span>
+          <span>{T.resetAsk(Math.round((game.durationMs || 0) / 60000))}</span>
           <button type="button" className="mini" onClick={() => setConfirming(false)} autoFocus>{T.resetNo}</button>
           <button type="button" className="mini danger" onClick={onReset} disabled={busy}>{T.resetYes}</button>
         </div>

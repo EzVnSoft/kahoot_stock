@@ -11,6 +11,7 @@ export default function Start({ info, busy, onStart }) {
       </div>
       <h1>{T.title}</h1>
       {info && <p className="sub">{T.startInfo(info.perSession, info.bankSize)}</p>}
+      {info?.examMinutes > 0 && <p className="sub">{T.startTime(info.examMinutes)}</p>}
       <button className="big-btn" onClick={onStart} disabled={busy || !info}>
         {busy ? T.starting : T.start}
       </button>

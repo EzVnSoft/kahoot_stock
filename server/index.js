@@ -21,17 +21,23 @@ export function createApp(questions, options = {}) {
     answered: s.answered
       ? { ...s.answered, correctIndices: s.questions[s.index].correct }
       : null,
+    timeLeftMs: store.timeLeftMs(s), // the browser counts down from this; the server stays the judge
+    durationMs: store.durationMs,
   });
 
   const withSession = (req, res, next) => {
     const s = store.get(req.params.id);
     if (!s) return res.status(404).json({ error: 'Session not found or expired. Please start a new exam.' });
-    req.exam = s;
+    req.exam = store.checkTime(s); // closes the exam if its 60 minutes are over
     next();
   };
 
   app.get('/api/info', (_req, res) =>
-    res.json({ bankSize: questions.length, perSession: Math.min(QUESTIONS_PER_SESSION, questions.length) }));
+    res.json({
+      bankSize: questions.length,
+      perSession: Math.min(QUESTIONS_PER_SESSION, questions.length),
+      examMinutes: Math.round(store.durationMs / 60000),
+    }));
 
   // Start a session: 50 random questions out of the whole bank.
   app.post('/api/sessions', (_req, res) => {
@@ -53,13 +59,24 @@ export function createApp(questions, options = {}) {
   // Answer the current question; the server decides right or wrong.
   app.post('/api/sessions/:id/answer', withSession, (req, res) => {
     const s = req.exam;
-    if (s.done) return res.status(409).json({ error: 'This exam is already finished.' });
+    if (s.done) return res.status(409).json({ error: 'This exam is already finished.', timeUp: s.timedOut });
     const q = s.questions[s.index];
     const { selected } = req.body ?? {};
     if (!validSelection(q, selected)) return res.status(400).json({ error: 'Invalid answer for this question.' });
     const result = store.answer(s, selected);
     if (!result) return res.status(409).json({ error: 'This question was already answered.' });
     res.json({ ...result, score: s.score });
+  });
+
+  // The browser's countdown reached zero: end the exam and return the summary.
+  // If the browser's clock was ahead of ours, say how much time is really left so it can re-sync.
+  app.post('/api/sessions/:id/finish', withSession, (req, res) => {
+    const s = req.exam;
+    if (!s.done) {
+      if (!store.canFinish(s)) return res.status(409).json({ error: 'Time is not up yet.', timeLeftMs: store.timeLeftMs(s) });
+      store.expire(s);
+    }
+    res.json(store.summary(s));
   });
 
   // "Next question". After the last one this returns the final summary.
@@ -92,6 +109,9 @@ export function createApp(questions, options = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const questions = JSON.parse(fs.readFileSync(path.join(root, 'data', 'questions.json'), 'utf8'));
   const port = Number(process.env.PORT) || 3000;
+  // EXAM_MINUTES changes the time limit (default 60), e.g. EXAM_MINUTES=90 npm start
+  const minutes = Number(process.env.EXAM_MINUTES);
+  const durationMs = minutes > 0 ? Math.round(minutes * 60000) : undefined;
   // HOST is optional: unset = listen on all network interfaces (reachable from your LAN);
   // HOST=127.0.0.1 = only this computer (use this when a tunnel such as Cloudflare/Tailscale does the public part).
   const host = process.env.HOST;
@@ -99,7 +119,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(`Quiz server ready: ${questions.length} questions, ${Math.min(QUESTIONS_PER_SESSION, questions.length)} per session`);
     console.log(`Open http://localhost:${port}${host ? ` (listening on ${host})` : ''}`);
   };
-  const app = createApp(questions);
+  const app = createApp(questions, { durationMs });
   if (host) app.listen(port, host, onReady);
   else app.listen(port, onReady);
 }

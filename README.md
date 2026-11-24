@@ -16,7 +16,8 @@ npm run build     # builds the React app into client/dist (once, and after UI ch
 npm start         # http://localhost:3000
 ```
 
-Use another port with `PORT=4000 npm start`.
+Use another port with `PORT=4000 npm start`. Each exam has a **60-minute** limit; change it with
+`EXAM_MINUTES=90 npm start`.
 
 To keep it running 24/7 on a Mac mini at home (starts at boot, optional public HTTPS address), follow [DEPLOY-MAC.md](DEPLOY-MAC.md).
 
@@ -46,8 +47,13 @@ npm start
 - The browser never receives the correct answer before it answers: grading happens on the server.
   Refreshing the page in the middle of an exam resumes the same session.
 - Each question appears once and cannot be answered twice.
+- **Countdown:** every exam (a new one from the start screen, from **Làm đề mới**, or from **Đề mới**) has 60 minutes for its 50 questions.
+  The clock is kept by the server (the session stores its deadline; every response says how much time is left), so refreshing the page does
+  not restart it and the browser's own clock cannot cheat. The timer in the top bar turns amber at 10 minutes and red at 1 minute.
+  At zero the exam ends and the result screen shows what was done (unanswered questions count as not correct). An answer that arrives
+  up to 3 seconds after the deadline (network delay) still counts; later ones are refused. Change the limit with `EXAM_MINUTES`.
 - **Đề mới** (top of the question screen) asks for confirmation, then ends the current session on the server
-  (`POST /api/sessions/:id/reset`) and starts a new one with 50 new random questions. "Next" is only allowed after answering.
+  (`POST /api/sessions/:id/reset`) and starts a new one with 50 new random questions and a fresh 60-minute clock. "Next" is only allowed after answering.
 
 ### Question types (detected by `scripts/convert-csv.js`)
 
@@ -64,7 +70,7 @@ Options are shown in the original order (not shuffled) because some options refe
 
 ```
 server/          Express API, session logic, tests
-client/src/      React screens (Start, Question, Result), theme.js (tile colours), strings.js (all UI text)
+client/src/      React screens (Start, Question, Result, Countdown), theme.js (tile colours), strings.js (all UI text)
 scripts/         convert-csv.js
 data/            questions.json (generated from the CSV)
 Questions_stocks.csv

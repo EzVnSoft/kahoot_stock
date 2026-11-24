@@ -82,6 +82,9 @@ Then open the URL in a browser and play a few questions.
 
 If you change `Questions_stocks.csv`, run `npm run convert` first so `data/questions.json` is updated, then deploy.
 
+The exam time limit is 60 minutes. To change it without touching the code:
+`gcloud run services update kahoot-ckhoan --region asia-southeast1 --set-env-vars EXAM_MINUTES=90`.
+
 ## Cost
 
 - Cloud Run has a monthly free allowance of requests, CPU time and memory time. A one-learner quiz with
@@ -105,18 +108,43 @@ If you change `Questions_stocks.csv`, run `npm run convert` first so `data/quest
 
 | Problem | What to do |
 |---|---|
-| Build fails with a permission error | Google may need the Cloud Run builder role on the default service account. Run the two lines below, wait two minutes, deploy again. |
+| `PERMISSION_DENIED: Build failed because the default service account is missing required IAM permissions` | The account that runs the build has no permissions yet. Follow "Fix: build permission error" below, wait 2-3 minutes, deploy again. |
 | `Billing account … not found` / `API not enabled` | Link billing to the project, then re-run the `gcloud services enable …` command. |
 | Page loads but shows "Session not found" | A new copy started (idle shutdown or restart). Start a new quiz. Check that `--max-instances 1` is set: `gcloud run services describe …`. |
 | "Revision failed to start" | Read the log (`gcloud run services logs read …`). The server must listen on the `PORT` Cloud Run provides; this project already does. |
 | Want to test the image on your own computer | `docker build -t quiz .` then `docker run -p 8080:8080 quiz`, and open `http://localhost:8080` (needs Docker Desktop). |
 
-Builder-role fix:
+## Fix: build permission error
+
+Cause: Cloud Build now runs builds as the project's **Compute Engine default service account**
+(`PROJECT_NUMBER-compute@developer.gserviceaccount.com`), and that account starts with almost no permissions.
+Give it the roles it needs (replace `YOUR_PROJECT_ID`):
 
 ```bash
-PROJECT_ID=$(gcloud config get-value project)
+PROJECT_ID=YOUR_PROJECT_ID
+
+# 1. Which account runs the build? Copy the e-mail it prints.
+gcloud builds get-default-service-account --project "$PROJECT_ID"
+
+# 2. Put that e-mail here (usually the -compute@developer one):
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-  --role="roles/run.builder"
+SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+# 3. Grant the roles, then wait 2-3 minutes.
+for ROLE in roles/run.builder roles/serviceusage.serviceUsageConsumer; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:$SA" --role="$ROLE"
+done
 ```
+
+Same thing without the terminal: Console -> IAM & Admin -> IAM -> find the Compute Engine default service account ->
+pencil icon -> Add another role -> **Cloud Run Builder** and **Service Usage Consumer** -> Save.
+
+If it still fails, check your own account. The person who runs `gcloud run deploy` needs `roles/owner`, or at least
+Cloud Run Source Developer, Service Usage Consumer and Service Account User:
+
+```bash
+gcloud projects get-iam-policy "$PROJECT_ID" --flatten="bindings[].members" \
+  --filter="bindings.members:user:YOUR_EMAIL" --format="value(bindings.role)"
+```
+
+If that does not list `roles/owner`, ask the project owner to grant you those roles in the Console (IAM page).
